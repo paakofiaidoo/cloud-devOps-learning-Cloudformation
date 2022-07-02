@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Carlos Rivas / Udacity - This template deploys a VPC
+Resources:
+    UdacityVPC:
+        Type: "AWS::EC2::VPC"
+        Properties:
+            CidrBlock: 10.0.0.0/16
+            EnableDnsHostnames: "true"
+            Tags:
+                - Key: name
+                  Value: myfirsttestvpc
+
+# script to run
+# aws cloudformation create-stack  --stack-name myFirstTest --region us-east-1 --template-body file://testcfn.yml
+#or
+#aws cloudformation create-stack --stack-name $1 --template-body file://$2  --parameters file://$3 --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=us-west-2
+# to update a stack
+#aws cloudformation update-stack  --stack-name myFirstTest --region us-east-1 --template-body file://testcfn.yml
+
+# delete a stack
+#aws cloudformation delete-stack --stack-name myFirstTest
