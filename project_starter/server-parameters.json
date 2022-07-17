@@ -3,10 +3,10 @@
 		"ParameterKey": "EnvironmentName",
 		"ParameterValue": "UdacityProject"
 	},
-    {
-        "ParameterKey": "VpcCIDR",
-        "ParameterValue": "10.0.0.0/16"
-    },
+	{
+		"ParameterKey": "VpcCIDR",
+		"ParameterValue": "10.0.0.0/16"
+	},
 	{
 		"ParameterKey": "PublicSubnet1CIDR",
 		"ParameterValue": "10.0.0.0/24"
@@ -22,8 +22,5 @@
 	{
 		"ParameterKey": "PrivateSubnet2CIDR",
 		"ParameterValue": "10.0.3.0/24"
-	},{
-		"ParameterKey":"AMIID",
-		"ParameterValue":"ami-0cff7528ff583bf9a"
 	}
 ]

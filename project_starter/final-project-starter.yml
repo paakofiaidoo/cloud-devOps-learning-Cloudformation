@@ -30,10 +30,6 @@ Parameters:
     Type: String
     Default: 10.0.3.0/24
 
-  AMIID:
-    Description: AMI image id
-    Type: AWS::EC2::Image::Id
-
 Resources:
   #vpc
   VPC:
@@ -44,20 +40,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref EnvironmentName
-
-  #internet gatway
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Ref EnvironmentName
-
-  InternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref VPC
 
   #public subnets
   PublicSubnet1:
@@ -104,6 +86,20 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+  
+  #internet gatway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    # Properties:
+    #   Tags:
+    #     - Key: Name
+    #       Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
 
   #natgateways
   NatGateway1EIP:
@@ -201,17 +197,6 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  # instace profile contains the IAM Role name(s) that we want to associate to our auto scaling EC2 Servers
-  # never give too much permissions to your EC2 instances! if they get hacked, the permissions get hacked also!
-  # in this example, I create a Role called UdacityS3ReadOnlyC2 and just give it a policy of S3 Read-Only Access
-  # ProfileWithRolesForOurApp:
-  # Type: AWS::IAM::InstanceProfile
-  # Properties:
-  #   Roles:
-  #     - UdacityS3ReadOnlyEC2
-
-
-
   UdacityS3ReadOnlyEC2:
     Type: AWS::IAM::Role
     Properties:
@@ -225,26 +210,30 @@ Resources:
             Action:
               - sts:AssumeRole
       Path: "/"
+      RoleName: !Sub ${EnvironmentName}-Role
 
   UdacityRolePolicies:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub "${EnvironmentName}-Policies"
+      PolicyName: AmazonS3ReadOnlyAccess
       PolicyDocument:
         Statement:
           - Effect: "Allow"
             Action:
               - s3:Get*
               - s3:List*
-            Resource: "*"
+            Resource:
+              - arn:aws:s3:::udacity-cloudformation-code
+              - arn:aws:s3:::udacity-cloudformation-code/*
       Roles:
-        - !Ref UdacityS3ReadOnlyEC2
+        - Ref: UdacityS3ReadOnlyEC2
 
   UdacityInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
+      Path: "/"
       Roles:
-        - !Ref UdacityS3ReadOnlyEC2
+        - Ref: UdacityS3ReadOnlyEC2
 
   #loadbalancer security group
   LBSecGroup:
@@ -289,27 +278,36 @@ Resources:
     Properties:
       UserData:
         Fn::Base64: !Sub |
-          apt-get update
-          apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-          add-apt-repository \
-          "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-          $(lsb_release -cs) \
-          stable"
-          apt-get update
-          apt-get install -y docker-ce
-          usermod -aG docker ubuntu
-          docker run -p 8080:8080 tomcat:8.0
-      ImageId: !Ref AMIID
-      KeyName: vockey
+          #!/bin/bash
+          apt-get update -y
+          apt-get install unzip awscli -y
+          apt-get install apache2 -y
+          systemctl start apache2.service
+          cd /var/www/html
+          echo "<h1>it works! Udagram, Udacity</h1>" > index.html
+      ImageId: ami-07ebfd5b3428b6f4d
+      # KeyName: vockey
       IamInstanceProfile: !Ref UdacityInstanceProfile
       SecurityGroups:
         - Ref: WebServerSecGroup
       InstanceType: t2.medium
       BlockDeviceMappings:
-        - DeviceName: "/dev/xvda"
+        - DeviceName: "/dev/sdk"
           Ebs:
             VolumeSize: "10"
+            
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: !Ref VPC
 
   WebAppGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -357,18 +355,7 @@ Resources:
       ListenerArn: !Ref "Listener"
       Priority: 1
 
-  WebAppTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 10
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 8
-      HealthyThresholdCount: 2
-      Port: 80
-      Protocol: HTTP
-      UnhealthyThresholdCount: 5
-      VpcId: !Ref VPC
+
 
 
 Outputs:
@@ -419,21 +406,3 @@ Outputs:
     Value: !Join ["", ["http://", !GetAtt WebAppLB.DNSName]]
     Export:
       Name: !Sub ${EnvironmentName}-LB-DNSName
-
-  # This is also optional.
-  # Bonus points for useful outputs!
-  # for example, if you create a Load Balancer
-  # it's nice to output the URL to it here, so that we don't have to go to the console to get it.
-# Sample UserData
-# When creating your Launch Configuration, you may need a UserData script
-# here's one that you can use for Ubuntu Linux that will:
-# Install Apache Web Server, Start it, and create an index.html that will be displayed
-# when you visit the IP address of this server with your web browser
-#Here it is:
-#
-#          #!/bin/bash
-#          apt-get update -y
-#          apt-get install apache2 -y
-#          systemctl start apache2.service
-#          cd /var/www/html
-#          echo "Udacity Demo Web Server Up and Running!" > index.html
